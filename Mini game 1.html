@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Kare Savaşı</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+  }
+  canvas {
+    display: block;
+    background: #222;
+  }
+  #restartBtn {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 30px;
+    font-size: 25px;
+    display: none;
+    cursor: pointer;
+    background: yellow;
+    border: none;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<button id="restartBtn">Yeniden Başlat</button>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const gravity = 0.8;
+const floor = canvas.height - 100;
+
+class Player {
+  constructor(x, color, jumpKey, shootKey) {
+    this.x = x;
+    this.y = floor;
+    this.width = 50;
+    this.height = 50;
+    this.color = color;
+    this.dy = 0;
+    this.canJump = true;
+    this.jumpKey = jumpKey;
+    this.shootKey = shootKey;
+    this.health = 10;
+    this.bullets = [];
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+  update() {
+    this.dy += gravity;
+    this.y += this.dy;
+    if(this.y > floor) {
+      this.y = floor;
+      this.dy = 0;
+      this.canJump = true;
+    }
+    this.draw();
+  }
+  jump() {
+    if(this.canJump){
+      this.dy = -15;
+      this.canJump = false;
+    }
+  }
+  shoot(direction){
+    const bullet = {x: this.x + this.width/2, y: this.y + this.height/2, dx: direction*10, size: 10};
+    this.bullets.push(bullet);
+  }
+}
+
+// Oyuncular
+let greenPlayer = new Player(100, "green", "KeyQ", "KeyE");
+let bluePlayer = new Player(canvas.width - 150, "blue", "KeyP", "KeyO"); // <-- O tuşu
+
+// Tuşları takip
+const keys = {};
+document.addEventListener("keydown", (e)=>{
+  keys[e.code] = true;
+
+  if(e.code === greenPlayer.jumpKey) greenPlayer.jump();
+  if(e.code === bluePlayer.jumpKey) bluePlayer.jump();
+
+  if(e.code === greenPlayer.shootKey) greenPlayer.shoot(1);
+  if(e.code === bluePlayer.shootKey) bluePlayer.shoot(-1);
+});
+
+document.addEventListener("keyup", (e)=>{
+  keys[e.code] = false;
+});
+
+let gameOver = false;
+
+// Oyun döngüsü
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Kılavuz
+  ctx.fillStyle = "white";
+  ctx.font = "25px Arial";
+  ctx.fillText("Yeşil: Q → Zıpla | E → Mermi", 20, 30);
+  ctx.fillText("Mavi: P → Zıpla | O → Mermi", 20, 60);
+
+  greenPlayer.update();
+  bluePlayer.update();
+
+  // Mermiler
+  greenPlayer.bullets.forEach((b, i)=>{
+    b.x += b.dx;
+    ctx.fillStyle = "lime";
+    ctx.fillRect(b.x, b.y, b.size, b.size);
+    if(b.x > canvas.width) greenPlayer.bullets.splice(i,1);
+    if(b.x < bluePlayer.x + bluePlayer.width && b.x + b.size > bluePlayer.x &&
+       b.y < bluePlayer.y + bluePlayer.height && b.y + b.size > bluePlayer.y) {
+      bluePlayer.health--;
+      greenPlayer.bullets.splice(i,1);
+    }
+  });
+
+  bluePlayer.bullets.forEach((b, i)=>{
+    b.x += b.dx;
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(b.x, b.y, b.size, b.size);
+    if(b.x < 0) bluePlayer.bullets.splice(i,1);
+    if(b.x < greenPlayer.x + greenPlayer.width && b.x + b.size > greenPlayer.x &&
+       b.y < greenPlayer.y + greenPlayer.height && b.y + b.size > greenPlayer.y) {
+      greenPlayer.health--;
+      bluePlayer.bullets.splice(i,1);
+    }
+  });
+
+  // Can durumu
+  ctx.fillStyle = "white";
+  ctx.font = "30px Arial";
+  ctx.fillText("Yeşil Can: " + greenPlayer.health, 20, 100);
+  ctx.fillText("Mavi Can: " + bluePlayer.health, canvas.width-200,100);
+
+  // Oyunu bitir
+  if(greenPlayer.health <=0 || bluePlayer.health <=0){
+    gameOver = true;
+    ctx.fillStyle = "yellow";
+    ctx.font = "60px Arial";
+    ctx.fillText("Oyun Bitti!", canvas.width/2 - 150, canvas.height/2);
+    document.getElementById("restartBtn").style.display = "block";
+    return;
+  }
+
+  if(!gameOver) requestAnimationFrame(animate);
+}
+
+animate();
+
+// Yeniden başlatma
+document.getElementById("restartBtn").addEventListener("click", ()=>{
+  greenPlayer = new Player(100, "green", "KeyQ", "KeyE");
+  bluePlayer = new Player(canvas.width - 150, "blue", "KeyP", "KeyO");
+  document.getElementById("restartBtn").style.display = "none";
+  gameOver = false;
+  animate();
+});
+</script>
+</body>
+</html>

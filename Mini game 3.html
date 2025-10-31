@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Çaba — Mermi, Füze, Uçak & Patlama & Tank</title>
+<style>
+:root{
+  --bg:#1e90ff; --text:#ffffff; --bullet:#ff0000;
+  --flash:#ffd54f; --missile:#21c36f; --plane:#f2f2f2;
+  --bomb:#222; --boom-core:#fff2b8; --boom-edge:#ff7a1a;
+  --tank:#444; --wheel:#222;
+}
+html,body{height:100%;margin:0}
+body{background:linear-gradient(180deg,var(--bg),#147bd1);display:flex;align-items:center;justify-content:center;overflow:hidden;font-family:"Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+.stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;user-select:none;}
+.word{font-size:clamp(72px,20vw,220px);color:var(--text);font-weight:800;cursor:crosshair;text-shadow:0 6px 24px rgba(0,0,0,0.25);}
+.flash{position:absolute;width:10px;height:10px;border-radius:50%;pointer-events:none;box-shadow:0 0 30px 10px var(--flash);opacity:0;transform:scale(0.2);transition:opacity 80ms linear,transform 120ms cubic-bezier(.2,.9,.3,1);}
+.bullet{position:absolute;width:14px;height:7px;border-radius:7px;background:linear-gradient(90deg,#fff 0%,var(--bullet) 40%,#ff6666 100%);box-shadow:0 2px 6px rgba(0,0,0,0.35),0 0 8px rgba(255,100,100,0.6);pointer-events:none;transform:translate(-50%,-50%) rotate(0deg);}
+.spark{position:absolute;width:2px;height:18px;background:var(--flash);top:50%;left:50%;opacity:0;transform-origin:center bottom;pointer-events:none;}
+.missile{position:absolute;width:22px;height:46px;border-radius:12px;background:linear-gradient(180deg,#aaf6d1 0%,var(--missile) 60%,#0f8f52 100%);box-shadow:0 6px 18px rgba(0,0,0,0.25),0 0 12px rgba(33,195,111,0.25);transform:translate(-50%,-50%) rotate(0deg);pointer-events:none;overflow:visible;}
+.missile::after{content:'';position:absolute;left:50%;bottom:-12px;transform:translateX(-50%);width:10px;height:18px;border-radius:8px;background:radial-gradient(circle at 50% 30%,#ffd08a,#ff8a2b 60%,transparent 70%);filter:blur(1px);opacity:0.95;}
+.hint{position:fixed;left:12px;bottom:12px;color:rgba(255,255,255,0.95);font-size:13px;background:rgba(0,0,0,0.16);padding:8px 10px;border-radius:8px;backdrop-filter:blur(4px);}
+.cat{position:absolute;font-size:64px;opacity:0;pointer-events:none;transition:opacity 0.2s ease;transform:translate(-50%,-50%);}
+.plane{position:absolute;width:120px;height:48px;pointer-events:none;transform:translate(-50%,-50%) rotate(0deg);display:flex;align-items:center;justify-content:center;}
+.plane .body{width:90px;height:24px;background:linear-gradient(90deg,#ffffff,#e6e6e6);border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,0.18);position:relative;left:8px;}
+.plane .wing{position:absolute;left:22px;top:8px;width:40px;height:10px;background:#eaeaea;transform:rotate(-12deg);border-radius:6px 6px 2px 2px;box-shadow:0 4px 8px rgba(0,0,0,0.12);}
+.bomb{position:absolute;width:18px;height:24px;border-radius:6px;background:var(--bomb);box-shadow:inset -2px -2px 6px rgba(255,255,255,0.03),0 4px 12px rgba(0,0,0,0.4);transform:translate(-50%,-50%);pointer-events:none;}
+.big-boom{position:absolute;width:40px;height:40px;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%) scale(0.2);opacity:0.95;background:radial-gradient(circle,var(--boom-core) 0%,var(--boom-edge) 45%,rgba(255,90,30,0.15) 65%,transparent 100%);box-shadow:0 0 80px 24px rgba(255,120,40,0.18);}
+.shake{animation:shake 420ms cubic-bezier(.36,.07,.19,.97);}
+@keyframes shake{10%,90%{transform:translate3d(-1px,0,0);}20%,80%{transform:translate3d(2px,0,0);}30%,50%,70%{transform:translate3d(-4px,0,0);}40%,60%{transform:translate3d(4px,0,0);}}
+.screen-flash{position:absolute;inset:0;background:rgba(255,255,255,0.95);pointer-events:none;opacity:0;transition:opacity 160ms ease;z-index:9999;}
+.tank{position:absolute;width:120px;height:60px;background:var(--tank);border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.35);pointer-events:none;}
+.tank .wheel{position:absolute;width:20px;height:20px;background:var(--wheel);border-radius:50%;bottom:-10px;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage" aria-label="Atış sahnesi">
+  <div class="flash" id="flash"></div>
+  <div class="word" id="word" tabindex="0">Çaba</div>
+  <div class="hint">Tık = mermi 🔴 • Boşluk = füze 🟢 • E = uçak → atom bombası • M = tank 💣</div>
+  <div id="screenFlash" class="screen-flash" aria-hidden="true"></div>
+</div>
+
+<script>
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+function playBulletSound(){const now=audioCtx.currentTime; const click=audioCtx.createOscillator(); click.type='square'; click.frequency.setValueAtTime(1200, now); const g=audioCtx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(0.7, now+0.004); g.gain.exponentialRampToValueAtTime(0.0001, now+0.06); click.connect(g); g.connect(audioCtx.destination); click.start(now); click.stop(now+0.06);}
+function playMissileSound(d=1){const now=audioCtx.currentTime; const osc=audioCtx.createOscillator(); osc.type='sawtooth'; osc.frequency.setValueAtTime(180, now); osc.frequency.exponentialRampToValueAtTime(900, now+d*0.85); const g=audioCtx.createGain(); g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.6, now+0.08); g.gain.exponentialRampToValueAtTime(0.001, now+d); const bp=audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(600, now); osc.connect(bp); bp.connect(g); g.connect(audioCtx.destination); osc.start(now); osc.stop(now+d);}
+function playAtomicBoom(){const now=audioCtx.currentTime; const sub=audioCtx.createOscillator(); sub.type='sine'; sub.frequency.setValueAtTime(60, now); sub.frequency.exponentialRampToValueAtTime(20, now+0.9); const sg=audioCtx.createGain(); sg.gain.setValueAtTime(0.0001, now); sg.gain.exponentialRampToValueAtTime(1.6, now+0.08); sg.gain.exponentialRampToValueAtTime(0.0001, now+2.2); sub.connect(sg); sg.connect(audioCtx.destination); sub.start(now); sub.stop(now+2.3);}
+const stage=document.getElementById('stage'); const word=document.getElementById('word'); const flash=document.getElementById('flash'); const screenFlash=document.getElementById('screenFlash');
+
+function easeOutQuad(t){return t*(2-t);}
+function shootBullet(x,y){
+  flash.style.left=x+'px'; flash.style.top=y+'px'; flash.style.opacity='1'; flash.style.transform='scale(1)'; setTimeout(()=>{flash.style.opacity='0'; flash.style.transform='scale(0.2)';},80);
+  word.style.transform='translateY(-6px) scale(0.995)'; setTimeout(()=> word.style.transform='',120);
+  const b=document.createElement('div'); b.className='bullet'; stage.appendChild(b);
+  const rect=word.getBoundingClientRect(); const startX=rect.left+rect.width/2; const startY=rect.top+rect.height/2;
+  const angle=Math.atan2(y-startY,x-startX); b.style.left=startX+'px'; b.style.top=startY+'px'; b.style.transform=`translate(-50%,-50%) rotate(${angle*180/Math.PI}deg)`;
+  const distance=Math.hypot(window.innerWidth,window.innerHeight)*1.2; const duration=1500+Math.random()*500; const start=performance.now();
+  function frame(now){const t=(now-start)/duration;if(t>=1){b.style.opacity='0'; b.remove(); showCat(x,y); return;} const progress=easeOutQuad(Math.min(1,Math.max(0,t))); b.style.left=startX+Math.cos(angle)*distance*progress+'px'; b.style.top=startY+Math.sin(angle)*distance*progress+'px'; b.style.opacity=1-progress; requestAnimationFrame(frame);}
+  requestAnimationFrame(frame);
+  for(let i=0;i<3;i++){const s=document.createElement('div'); s.className='spark'; stage.appendChild(s); s.style.left=(startX+(Math.random()-0.5)*30)+'px'; s.style.top=(startY+(Math.random()-0.5)*30)+'px'; s.style.opacity='1'; s.style.transform=`translate(-50%,-50%) rotate(${Math.random()*360}deg) scaleY(${0.3+Math.random()*1.2})`; s.style.transition='opacity 140ms linear, transform 140ms ease-out'; setTimeout(()=>{s.style.opacity='0'; s.style.transform=`translate(-50%,-50%) rotate(${Math.random()*360}deg) scaleY(0.1)`; setTimeout(()=>s.remove(),200);},40+20*i);}
+  if(audioCtx.state==='suspended'){audioCtx.resume().then(()=>playBulletSound());}else playBulletSound();
+}
+function showCat(x,y){const c=document.createElement('div'); c.className='cat'; c.style.left=x+'px'; c.style.top=y+'px'; c.textContent='🐱'; stage.appendChild(c); requestAnimationFrame(()=>c.style.opacity='1'); setTimeout(()=>{c.style.opacity='0'; setTimeout(()=>c.remove(),200);},1200);}
+function launchMissile(){const rect=word.getBoundingClientRect(); const startX=rect.left+rect.width/2; const startY=rect.top+rect.height/2; const targetX=window.innerWidth*(0.7+Math.random()*0.2); const targetY=window.innerHeight*(0.12+Math.random()*0.18); const angle=Math.atan2(targetY-startY,targetX-startX); const m=document.createElement('div'); m.className='missile'; stage.appendChild(m); m.style.left=startX+'px'; m.style.top=startY+'px'; m.style.transform=`translate(-50%,-50%) rotate(${angle*180/Math.PI}deg)`; const distance=Math.hypot(targetX-startX,targetY-startY); const speed=0.35+Math.random()*0.12; const duration=Math.max(700,distance/(speed*1.2)); const start=performance.now(); const smokeInterval=setInterval(()=>{const s=document.createElement('div'); s.style.position='absolute'; s.style.left=m.style.left; s.style.top=m.style.top; s.style.width='10px'; s.style.height='10px'; s.style.borderRadius='50%'; s.style.transform='translate(-50%,-50%)'; s.style.pointerEvents='none'; s.style.opacity='0.6'; s.style.background='rgba(200,240,220,0.18)'; s.style.filter='blur(4px)'; stage.appendChild(s); let t0=performance.now(); function step(now){const tt=(now-t0)/700;if(tt>=1){s.remove();return;} s.style.opacity=String(0.6*(1-tt)); requestAnimationFrame(step);} requestAnimationFrame(step);},90);
+  function frame(now){const t=(now-start)/duration;if(t>=1){clearInterval(smokeInterval); m.style.left=targetX+'px'; m.style.top=targetY+'px'; m.remove(); if(audioCtx.state==='suspended'){audioCtx.resume().then(()=>playMissileSound(0.9));}else playMissileSound(0.9); return;} const progress=easeOutQuad(Math.min(1,Math.max(0,t))); const xPos=startX+Math.cos(angle)*distance*progress; const yPos=startY+Math.sin(angle)*distance*progress; m.style.left=xPos+'px'; m.style.top=yPos+'px'; requestAnimationFrame(frame);} requestAnimationFrame(frame);}
+
+async function sendPlaneAndBomb(){const startY=window.innerHeight*0.12+(Math.random()-0.5)*40; const off=-160; const endX=window.innerWidth+160; const plane=document.createElement('div'); plane.className='plane'; plane.style.left=off+'px'; plane.style.top=startY+'px'; stage.appendChild(plane); plane.innerHTML=`<div class="body"></div><div class="wing"></div>`; const duration=4200+Math.random()*900; const start=performance.now(); const dropAtX=window.innerWidth*(0.45+Math.random()*0.15); function flyFrame(now){const t=(now-start)/duration;if(t>=1){plane.remove();return;} const x=off+(endX-off)*t; plane.style.left=x+'px'; plane.style.top=startY+Math.sin(t*Math.PI*2)*6+'px'; if(!plane._dropped && x>=dropAtX){plane._dropped=true; dropBomb(x,startY+24);} requestAnimationFrame(flyFrame);} requestAnimationFrame(flyFrame); if(audioCtx.state==='suspended'){await audioCtx.resume();} const whooshOsc=audioCtx.createOscillator(); whooshOsc.type='sawtooth'; whooshOsc.frequency.setValueAtTime(220,audioCtx.currentTime); const whooshGain=audioCtx.createGain(); whooshGain.gain.setValueAtTime(0.0001,audioCtx.currentTime); whooshGain.gain.linearRampToValueAtTime(0.12,audioCtx.currentTime+0.08); whooshOsc.connect(whooshGain); whooshGain.connect(audioCtx.destination); whooshOsc.start(); setTimeout(()=>{whooshGain.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.4); setTimeout(()=>{try{whooshOsc.stop();}catch(e){}},500);},duration-250);}
+function dropBomb(x,y){const b=document.createElement('div'); b.className='bomb'; stage.appendChild(b); b.style.left=x+'px'; b.style.top=y+'px'; const fallHeight=window.innerHeight-y-40; const duration=900+Math.random()*350; const start=performance.now(); function fall(now){const t=(now-start)/duration;if(t>=1){b.remove(); createAtomicExplosion(x,window.innerHeight*0.65); return;} const progress=easeOutQuad(t); b.style.top=y+fallHeight*progress+'px'; requestAnimationFrame(fall);} requestAnimationFrame(fall);}
+function createAtomicExplosion(x,y){screenFlash.style.opacity='1'; setTimeout(()=>screenFlash.style.opacity='0',160); document.body.classList.add('shake'); setTimeout(()=>document.body.classList.remove('shake'),420); const sizes=[80,200,540]; sizes.forEach((sz,i)=>{const el=document.createElement('div'); el.className='big-boom'; el.style.left=x+'px'; el.style.top=y+'px'; el.style.width=sz+'px'; el.style.height=sz+'px'; el.style.opacity=String(1-i*0.18); stage.appendChild(el); const dur=600+i*220; el.animate([{transform:'translate(-50%,-50%) scale(0.2)',opacity:1},{transform:'translate(-50%,-50%) scale(1.6)',opacity:0}],{duration:dur,easing:'cubic-bezier(.2,.8,.2,1)'}); setTimeout(()=>el.remove(),dur+80);}); if(audioCtx.state==='suspended'){audioCtx.resume().then(()=>playAtomicBoom());}else playAtomicBoom();}
+
+/* --- Tank (M tuşu) --- */
+function sendTank(){
+  const tank = document.createElement('div'); tank.className='tank'; stage.appendChild(tank);
+  const tankWidth=120, tankHeight=60;
+  tank.style.left=(window.innerWidth*0.2 + Math.random()*0.6*window.innerWidth)+'px';
+  let y = window.innerHeight + 30;
+  tank.style.top=y+'px';
+  // ekle tekerlekler
+  for(let i=0;i<3;i++){const w=document.createElement('div'); w.className='wheel'; w.style.left=(20+40*i)+'px'; tank.appendChild(w);}
+  const duration=3000;
+  const start=performance.now();
+  function move(now){
+    const t=(now-start)/duration;
+    if(t>=1){tank.remove(); return;}
+    const progress=easeOutQuad(Math.min(1,t));
+    y = window.innerHeight - 120 + Math.sin(progress*3.14)*20; // hafif yukarı-aşağı
+    tank.style.top=y+'px';
+    // rastgele ateş
+    if(Math.random()<0.02){shootBullet(parseFloat(tank.style.left)+60, y);}
+    requestAnimationFrame(move);
+  }
+  requestAnimationFrame(move);
+}
+
+/* ---------- Event listeners ---------- */
+stage.addEventListener('click', (e)=>{shootBullet(e.clientX,e.clientY);});
+window.addEventListener('keydown', (e)=>{
+  if(e.code==='Space'){e.preventDefault(); launchMissile();}
+  else if(e.key.toLowerCase()==='e'){e.preventDefault(); if(audioCtx.state==='suspended'){audioCtx.resume().then(()=>sendPlaneAndBomb());}else sendPlaneAndBomb();}
+  else if(e.key.toLowerCase()==='m'){e.preventDefault(); if(audioCtx.state==='suspended'){audioCtx.resume().then(()=>sendTank());}else sendTank();}
+});
+window.addEventListener('touchstart',(ev)=>{const t=ev.touches[0]; if(!t)return; shootBullet(t.clientX,t.clientY);});
+word.addEventListener('keydown',(e)=>{if(e.key==='Enter')shootBullet(window.innerWidth*0.8,window.innerHeight*0.5);});
+function ensureAudio(){if(audioCtx.state==='suspended')audioCtx.resume(); window.removeEventListener('pointerdown',ensureAudio); window.removeEventListener('keydown',ensureAudio);}
+window.addEventListener('pointerdown',ensureAudio); window.addEventListener('keydown',ensureAudio);
+</script>
+</body>
+</html>

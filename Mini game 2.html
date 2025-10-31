@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Yerçekimli Harfler - Fırlatma</title>
+  <style>
+    html,body { 
+      height:100%;margin:0;overflow:hidden;background:#111;color:#fff;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      font-family:sans-serif;
+    }
+    #inputArea {position:absolute;top:20px;}
+    input {
+      padding:10px;font-size:20px;border:none;border-radius:5px;
+    }
+    canvas {background:#111;display:block;}
+  </style>
+</head>
+<body>
+  <div id="inputArea">
+    <input id="textInput" placeholder="Yazını gir ve Enter'a bas" />
+  </div>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let letters = [];
+    const gravity = 0.5;
+    const bounce = 0.6;
+    let mouse = {x:0, y:0, down:false, held:null, lastX:0, lastY:0};
+
+    document.getElementById('textInput').addEventListener('keydown', e => {
+      if(e.key === 'Enter') {
+        const text = e.target.value;
+        e.target.value = '';
+        letters = [];
+        let startX = canvas.width/2 - text.length*15;
+        for(let i=0;i<text.length;i++){
+          letters.push({
+            char:text[i],
+            x:startX + i*30,
+            y:100,
+            vx:Math.random()*4-2,
+            vy:Math.random()*-5-2,
+            rotation:0,
+            rotationSpeed:(Math.random()-0.5)*0.1,
+            size:30
+          });
+        }
+      }
+    });
+
+    canvas.addEventListener('mousedown', e=>{
+      mouse.down = true;
+      mouse.x = e.clientX; mouse.y = e.clientY;
+      mouse.lastX = mouse.x; mouse.lastY = mouse.y;
+      for(let l of letters){
+        const dx = l.x - mouse.x;
+        const dy = l.y - mouse.y;
+        if(Math.sqrt(dx*dx+dy*dy) < 20){
+          mouse.held = l;break;
+        }
+      }
+    });
+
+    canvas.addEventListener('mouseup', ()=>{
+      mouse.down=false;
+      if(mouse.held){
+        // fırlatma hızı hesapla
+        mouse.held.vx = (mouse.x - mouse.lastX)*0.5;
+        mouse.held.vy = (mouse.y - mouse.lastY)*0.5;
+        mouse.held.rotationSpeed = (Math.random()-0.5)*0.2;
+      }
+      mouse.held=null;
+    });
+
+    canvas.addEventListener('mousemove', e=>{
+      if(mouse.down && mouse.held){
+        // sürükleme sırasında harfi takip ettir
+        mouse.held.x = e.clientX;
+        mouse.held.y = e.clientY;
+        mouse.held.vx = 0;
+        mouse.held.vy = 0;
+        mouse.held.rotationSpeed = 0;
+      }
+      mouse.lastX = mouse.x;
+      mouse.lastY = mouse.y;
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    function loop(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for(let l of letters){
+        if(l!==mouse.held){
+          l.vy += gravity;
+          l.x += l.vx;
+          l.y += l.vy;
+          l.rotation += l.rotationSpeed;
+
+          if(l.y + l.size/2 > canvas.height){
+            l.y = canvas.height - l.size/2;
+            l.vy *= -bounce;
+            l.vx *= 0.7;
+            l.rotation = 0; // yere inince dik durması
+          }
+          if(l.x < 0 || l.x > canvas.width){
+            l.vx *= -1;
+          }
+        }
+
+        ctx.save();
+        ctx.translate(l.x, l.y);
+        ctx.rotate(l.rotation);
+        ctx.fillStyle = '#0ff';
+        ctx.font = `${l.size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.char, 0, 0);
+        ctx.restore();
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
